@@ -1,0 +1,23 @@
+<html>
+<head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" type="text/css" href="css/style.css" />
+</head>
+<body>
+<div style="width: 100%;" align="center">
+    <div style="margin-top: 20px; width: 80%; text-align: left;">
+
+        <h1><a href="/">Auroraメモ</a></h1>
+
+        <h2>レプリケーション</h2>
+        <h3>レプリケーションの選択肢</h3>
+        <ul>
+            <li>Aurora レプリカ (<a href="dbcluster.html">DBクラスター参照</a>)</li>
+            <li>別のリージョンにもう1つDBクラスター(とそのレプリカ)を作成する。別々のリージョンに2つのDBクラスター構成</li>
+            <li>同一リージョンに2つのDBクラスターを配置し、MySQLのバイナリログによりレプリケーションを使用する</li>
+            <li>マスターとしてRDSのDBインスタンス、とAuroraのDBクラスターにそのレプリカを作成する。これは通常はAuroraへの移行方法として利用される</li>
+        </ul>
+    </div>
+</div>
+</body>
+</html>
