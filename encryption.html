@@ -22,12 +22,12 @@
 
 <ul>
     <li>KMSのキーを使って暗号化できる</li>
-    <li>暗号化を有効にしたDBインスタンスでは、基盤のストレージに格納中のデータは暗号化される。また自動的なバックアップ、スナップショット、リードレプリカ、すべてのログについても暗号化される。</li>
+    <li>暗号化を有効にしたDBインスタンスでは、基盤のストレージに格納中のデータは暗号化される。また自動的なバックアップ、スナップショット、Readレプリカ、すべてのログについても暗号化される。</li>
     <li>暗号化と復号化はシームレスに行われる。暗号化データへのアクセスの認証と復号は(RDSが)透過的に行うので、アプリを変更する必要はない（正当な手段でアクセスされたら見えてしまうということ？）</li>
     <li>パフォーマンスへの影響はほとんど無いようである</li>
     <li>DBインスタンス上で暗号化が行われる</li>
-    <li>ソースDBインスタンスとリードレプリカの間の通信データは暗号化される。DBインスタンスが暗号化されているか否かにかかわらず。またリージョン間のレプリケーションにも当てはまる。</li>
-    <li>暗号化インスタンスにおけるリードレプリカは、マスターと同じリージョンに居る場合は、マスターと同じキーを使用して暗号化される</li>
+    <li>ソースDBインスタンスとReadレプリカの間の通信データは暗号化される。DBインスタンスが暗号化されているか否かにかかわらず。またリージョン間のレプリケーションにも当てはまる。</li>
+    <li>暗号化インスタンスにおけるReadレプリカは、マスターと同じリージョンに居る場合は、マスターと同じキーを使用して暗号化される</li>
     <li>
         <p>暗号化するには、DB作成時に暗号化を有効にする</p>
         <img src="img/enable_encryption.png"/>
@@ -41,6 +41,7 @@
 <h5>MySQL</h5>
 
 <ul>
+    <li>侵入されて通信を見られた場合に有効か(VPCで完結する場合)</li>
     <li>DBインスタンスとアプリ間の接続に SSL (AES-256) を使用できる</li>
     <li>AuroraのSSLサポートはRDSと同じプロセスと公開鍵を使用している</li>
     <li>DBインスタンス作成時にRDSはSSL証明書を作成し、インスタンスにインストールする。SSL証明書は認証局によって署名されている。SSL証明書にはそのDBインスタンスのエンドポイントがCN(Common Name)に含まれており、なりすまし攻撃を防げるようにしている。クライアントがSAN(Subject Alternative Names)をサポートしている場合、DBクラスターのエンドポイントだけを使用してSSL接続することができる。サポートしていない場合は、プライマリインスタンスの(インスタンス)エンドポイントを使用する必要がある。（？）</li>
@@ -51,23 +52,24 @@
         <p>mysqlコマンドでは--ssl-caパラメータに公開鍵を指定する</p>
         <p>MySQL 5.7以降</p>
         <pre>
-     mysql -h myinstance.c9akciq32.rds-us-east-1.amazonaws.com --ssl-ca=[full path]rds-combined-ca-bundle.pem --ssl-mode=VERIFY_IDENTITY
+mysql -h myinstance.c9akciq32.rds-us-east-1.amazonaws.com --ssl-ca=[full path]rds-combined-ca-bundle.pem --ssl-mode=VERIFY_IDENTITY
         </pre>
         <p>MySQL 5.6以前</p>
         <pre>
-     mysql -h myinstance.c9akciq32.rds-us-east-1.amazonaws.com --ssl-ca=[full path]rds-combined-ca-bundle.pem --ssl-verify-server-cert
+mysql -h myinstance.c9akciq32.rds-us-east-1.amazonaws.com --ssl-ca=[full path]rds-combined-ca-bundle.pem --ssl-verify-server-cert
         </pre>
     </li>
+    <li>（これも公開鍵？）すべてのリージョンで使用できるルート証明書は<a href="https://s3.amazonaws.com/rds-downloads/rds-ca-2015-root.pem">https://s3.amazonaws.com/rds-downloads/rds-ca-2015-root.pem</a>で取得できる。アプリが証明書のチェーンに対応していない場合はリージョン固有の証明書（中間証明書）を取得して使用する。</li>
     <li>
         <p>MySQLの機能を使用して、特定のユーザーについてSSL接続を必須とすることができる</p>
         <p>MySQL 5.7以降</p>
         <pre>
-     ALTER USER 'encrypted_user'@'%' REQUIRE SSL;
+ALTER USER 'encrypted_user'@'%' REQUIRE SSL;
         </pre>
         <p>encrypted_userがユーザー名</p>
         <p>MySQL 5.6以前</p>
         <pre>
-     GRANT USAGE ON *.* TO 'encrypted_user'@'%' REQUIRE SSL;
+GRANT USAGE ON *.* TO 'encrypted_user'@'%' REQUIRE SSL;
         </pre>
     </li>
     <li>MySQLのSSL接続についての<a href="https://dev.mysql.com/doc/refman/5.7/en/using-encrypted-connections.html">ドキュメント</a>も参照</li>
@@ -75,13 +77,13 @@
         <p>MySQLサーバー側でSSL接続を必須にするには設定ファイルにrequire_secure_transportを指定するか、サーバー実行中に以下のコマンドを実行する</p>
         <p>MySQL 5.7</p>
         <pre>
-     [mysqld]
-     require_secure_transport=ON
+[mysqld]
+require_secure_transport=ON
         </pre>
         <pre>
-     SET PERSIST require_secure_transport=ON;
+SET PERSIST require_secure_transport=ON;
         </pre>
-        <p>require_secure_transportは5.7.8で追加されたようである</p>
+        <p>require_secure_transportは5.7.8で追加されたようである。5.6にはない</p>
     </li>
     <li>サーバー側がSSL必須かにかかわらず、クライアント側で必須としたい場合は、--ssl-modeにREQUIRED、VERIFY_CA、VERIFY_IDENTITYを指定する</li>
 </ul>
