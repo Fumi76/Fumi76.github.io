@@ -9,6 +9,7 @@ body {
 
 a {
 	color: white;
+	text-decoration:none;
 }
 
 pre {
@@ -16,4 +17,5 @@ pre {
   padding: 10px;
   font-family: "Consolas";
   font-size: 12pt;
+  white-space: pre-wrap;
 }
