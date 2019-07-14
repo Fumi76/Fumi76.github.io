@@ -1,0 +1,150 @@
+<html>
+<head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" type="text/css" href="css/style.css" />
+</head>
+<body>
+<div style="width: 100%;" align="center">
+    <div style="margin-top: 20px; width: 80%; text-align: left;">
+
+        <h1><a href="/">Auroraメモ</a></h1>
+
+        <h2>パフォーマンス</h2>
+
+        <h3>パフォーマンス評価ガイド</h3>
+        <ul>
+            <li>sysbenchを使用。bashスクリプトを編集すれば希望のツールを使用できる</li>
+            <li>
+                CloudFormationのテンプレートに一式書いてある。以下を作成する
+                <ul>
+                    <li>EC2(c5.18xlarge) Amazon Linux 1台。sysbenchの実行、バスチオンホスト</li>
+                    <li>Aurora DBインスタンス(r4.16xlarge Amazon Linux) 1台</li>
+                    <li>EC2で実行するためのbashスクリプトなどをS3バケットに格納</li>
+                </ul>
+                <p>テンプレートは<a href="https://s3.amazonaws.com/aurorabenchmark/labstack.yml">ここ</a>で見れる</p>
+                <p>内容を抜粋</p>
+                <p>VPC、サブネット</p>
+                <pre>
+  ## Create VPC
+  LabVpc:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 172.31.0.0/16
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'true'
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref 'AWS::StackName', Aurora Lab VPC]]
+
+  ## Create Public Subnets
+  PublicSubnet01:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref LabVpc
+      MapPublicIpOnLaunch: 'true'
+      CidrBlock: 172.31.0.0/24
+      AvailabilityZone: !Sub ${AWS::Region}a
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref 'AWS::StackName', Aurora Lab Subnet 1 - Public]]
+  ## Create Private Subnets
+  PrivateSubnet01:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref LabVpc
+      MapPublicIpOnLaunch: 'false'
+      CidrBlock: 172.31.24.0/24
+      AvailabilityZone: !Sub ${AWS::Region}a
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref 'AWS::StackName', Aurora Lab Subnet 4 - Private]]
+                </pre>
+                <p>EC2</p>
+                <pre>
+  ## Create the bastion host
+  BastionHost:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      SubnetId: !Ref PublicSubnet01
+      InstanceType: c5.18xlarge
+      Monitoring: True
+      SecurityGroupIds: [!Ref SshSecurityGroup]
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref 'AWS::StackName', Bastion Host]]
+      ImageId: !Ref BastionAmi
+      IamInstanceProfile: !Ref RootInstanceProfile
+                </pre>
+                <p>Auroraクラスター</p>
+                <pre>
+  AuroraDestinationDBCluster:
+    Type: 'AWS::RDS::DBCluster'
+    Properties:
+      DatabaseName: sysbench
+      DBClusterIdentifier: !Sub '${AWS::StackName}'
+      DBClusterParameterGroupName: !Ref AuroraClusterParameterGroup
+      DBSubnetGroupName: !Ref AuroraDbSubnetGroup
+      Engine: !If [Is57, aurora-mysql, aurora ]
+      EngineVersion: !If [Is57, 5.7.mysql_aurora.2.04.1, 5.6.mysql_aurora.1.19.0 ]
+      MasterUsername: masteruser
+      MasterUserPassword: Password1
+      VpcSecurityGroupIds: [!GetAtt MySqlSecurityGroup.GroupId]
+    DependsOn: MySqlSecurityGroup
+    DeletionPolicy: "Delete"
+  ## Create First Aurora Instance
+  AuroraInstance01:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      AvailabilityZone: 'us-east-1a'
+      DBClusterIdentifier: !Ref AuroraDestinationDBCluster
+      DBInstanceClass: db.r4.16xlarge
+      DBInstanceIdentifier: !Join ['-', [!Ref 'AWS::StackName', 'Instance01']]
+      DBParameterGroupName: !Ref AuroraInstanceParameterGroup
+      DBSubnetGroupName: !Ref AuroraDbSubnetGroup
+      #EnablePerformanceInsights: 'true'
+      EnablePerformanceInsights: !If [Is57, 'false', 'true' ]
+      Engine: !If [Is57, aurora-mysql, aurora ]
+      EngineVersion: !If [Is57, 5.7.mysql_aurora.2.04.1, 5.6.mysql_aurora.1.19.0 ]
+      LicenseModel: general-public-license
+      PubliclyAccessible: 'false'
+  AuroraClusterParameterGroup:
+    Type: AWS::RDS::DBClusterParameterGroup
+    Properties:
+      Description: !Join ['-', [!Ref 'AWS::StackName', 'Cluster Parameter Group']]
+      Family: !If [Is57, aurora-mysql5.7, aurora5.6 ]
+      Parameters:
+        innodb_flush_log_at_trx_commit: 0
+        innodb_sync_array_size: 1024
+        max_connections: 16000
+        max_user_connections: 16000
+        table_definition_cache: 524288
+        table_open_cache: 524288
+        table_open_cache_instances: 64
+  AuroraInstanceParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: !Join ['-', [!Ref 'AWS::StackName', 'Instance Parameter Group']]
+      Family: !If [Is57, aurora-mysql5.7, aurora5.6 ]
+                </pre>
+            </li>
+            <li>評価シナリオは100%読み取りと100%書き込みの2つを実施</li>
+            <li>作成されるインスタンスは、スループットがネットワーク帯域の上限で制限されないように、拡張ネットワーキングを有効にしている</li>
+            <li>EC2に使用するAMIはカスタムなもののようである(バージニア北部リージョン)
+                <pre>
+  BastionAmi:
+    Description: 'The AMI used to create the bastion host'
+    Type: 'String'
+    Default: 'ami-0f873d4d3a8b11b74'
+                </pre>
+            </li>
+            <li>bashスクリプトにはsysbenchを実行するためのコマンドが書かれている?</li>
+            <li>sysbenchのDBが作成されると、250回ループ処理をする。1回ごとにsysbenchの新しいインスタンスが起動し、20のユーザー接続をシミュレートする。1秒の休止のあと、次のループ処理で次の20接続が作成される。4分を経過すると、接続数は5000に達し、完全な負荷がかかった状態となる</li>
+            <li>ガイドによると5000接続で80万クエリ/秒以上の結果が出ている</li>
+        </ul>
+
+    </div>
+</div>
+</body>
+</html>
