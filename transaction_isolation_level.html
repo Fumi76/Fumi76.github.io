@@ -1,0 +1,27 @@
+<html>
+<head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" type="text/css" href="css/style.css" />
+</head>
+<body>
+<div style="width: 100%;" align="center">
+
+<div style="margin-top: 20px; width: 80%; text-align: left;">
+<p>更新日： 2019/7/28</p>
+<hr>
+    <h1><a href="/">Aurora MySQLメモ</a></h1>
+
+	<h2>トランザクション分離レベル</h2>
+	
+	<ul>
+		<li>マスター上のセッションについてのみ変更することができる</li>
+		<li>レプリカは常に REPEATABLE READ を使用する。(InnoDB)これは変更不可<li>
+		<li>マスターにおいても SERIALIZABLE には変更できない模様。（SERIALIZABLEではSELECTで参照する行に共有ロックがかかる。）</li>
+		<li>REPEATABLE READではファントムリード（他のトランザクションのINSERT、DELETE)が発生するが、MySQLでは発生しない。(Auroraでも発生しなかった)MVCCという技術によるとのこと。ただ別の問題があるらしい。(？)</li>
+		<li>これとは別にマスターとレプリカの間にはレプリケーションラグがあるので注意（通常100ミリ秒以下）。コミットした内容がレプリカ上では見えない、古い内容が返る。</li>
+	</ul>
+<hr>
+</div>
+</div>
+</body>
+</html>

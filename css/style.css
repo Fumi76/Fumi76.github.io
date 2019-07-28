@@ -8,7 +8,12 @@ body {
 }
 
 a {
-	color: white;
+	color: lightcyan;
+	text-decoration:none;
+}
+
+a:hover {
+	color: cyan;
 	text-decoration:none;
 }
 
